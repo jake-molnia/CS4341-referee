@@ -200,16 +200,10 @@ class TestLaskerMorris(unittest.TestCase):
 
     def test_timeout_handling(self) -> None:
         """Test handling of move timeouts"""
+        # Simply raise TimeoutError immediately
+        self.game.current_player.read.side_effect = TimeoutError
 
-        # Mock player to simulate timeout with a small delay to ensure consistent behavior
-        def delayed_timeout(*args, **kwargs):
-            import time
-
-            time.sleep(0.1)  # Small delay to ensure consistent timing
-            raise TimeoutError()
-
-        self.game.current_player.read.side_effect = delayed_timeout
-
+        # No real timing involved
         move = self.game._get_move_with_timeout()
         self.assertIsNone(move)
 
@@ -431,14 +425,7 @@ class TestLaskerMorris(unittest.TestCase):
     def test_game_end_by_timeout(self) -> None:
         """Test game ending when a player's move times out"""
         self.game._is_game_over = False
-
-        def delayed_timeout(*args, **kwargs):
-            import time
-
-            time.sleep(0.1)  # Small delay
-            raise TimeoutError()
-
-        self.game.current_player.read.side_effect = delayed_timeout
+        self.game.current_player.read.side_effect = TimeoutError
 
         # Run game and verify winner
         winner = self.game.run_game()
