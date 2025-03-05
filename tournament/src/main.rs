@@ -240,8 +240,8 @@ impl TournamentManager {
     fn run_match(
         &self,
         _round: &str,
-        _group: &str,
-        _game_number: i32,
+        group: &str,
+        game_number: i32,
         player1: &str,
         player2: &str,
     ) -> Result<MatchResult, Box<dyn std::error::Error>> {
@@ -336,7 +336,11 @@ impl TournamentManager {
         }
 
         // Parse result to determine winner
-        let result = self.parse_game_result(&stdout, &stderr, player1, player2);
+        let mut result = self.parse_game_result(&stdout, &stderr, player1, player2);
+
+        // Set the group and game number in the result
+        result.group = group.to_string();
+        result.game_number = game_number;
 
         info!("Match result: {} vs {} - Winner: {:?}, Draw: {}",
               player1, player2, result.winner, result.is_draw);
