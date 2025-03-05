@@ -17,6 +17,7 @@
           pkgs.uv
           pkgs.maven
           pkgs.cargo
+          pkgs.dos2unix
         ];
 
       };
