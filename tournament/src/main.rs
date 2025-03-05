@@ -3,12 +3,12 @@ use log::{debug, info, warn, LevelFilter};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
-use simple_logger::SimpleLogger;
 use std::collections::HashMap;
 use std::fs::File;
 use std::process::{Command, Stdio};
 use std::fs;
 use toml;
+use simplelog::{WriteLogger, Config};
 
 #[derive(Debug, Deserialize)]
 struct TournamentConfig {
@@ -62,10 +62,10 @@ impl PlayerStats {
     fn add_result(&mut self, result: &MatchResult) {
         if result.is_draw {
             self.draws += 1;
-            self.points += 0.5;
+            self.points += 1.0;
         } else if Some(self.name.clone()) == result.winner {
             self.wins += 1;
-            self.points += 1.0;
+            self.points += 3.0;
         } else {
             self.losses += 1;
         }
@@ -121,11 +121,29 @@ impl TournamentManager {
             players.shuffle(&mut rng);
 
             let num_players = players.len();
-            let group_size = (num_players + 3) / 4; // Ceiling division to get ~4-5 players per group
+            let target_groups = 8; // We want 8 groups for the first round
 
-            for (group_idx, chunk) in players.chunks(group_size).enumerate() {
-                let group_name = format!("Group {}", (b'A' + group_idx as u8) as char);
-                self.groups.insert(group_name, chunk.to_vec());
+            // Ensure we don't create more groups than players
+            let num_groups = std::cmp::min(target_groups, num_players);
+
+            self.groups.clear();
+
+            // Calculate base size and remainder
+            let base_size = num_players / num_groups;
+            let remainder = num_players % num_groups;
+
+            let mut start = 0;
+            for i in 0..num_groups {
+                // Groups with index < remainder get one extra player
+                let group_size = if i < remainder { base_size + 1 } else { base_size };
+                let end = start + group_size;
+
+                let group_name = format!("Group {}", (b'A' + i as u8) as char);
+                let group_players = players[start..end].to_vec();
+
+                self.groups.insert(group_name, group_players);
+
+                start = end;
             }
 
             info!("Created random groups for First Round");
@@ -163,21 +181,28 @@ impl TournamentManager {
         // Run Second Round
         info!("Starting Second Round");
         self.current_round = "Second Round".to_string();
-        self.setup_next_round(&first_round_winners, 2)?;
+        self.setup_next_round(&first_round_winners, 4)?; // 4 groups of 4 teams each
         self.run_round()?;
         let second_round_winners = self.determine_winners();
 
-        // Run Semi-Final Round
-        info!("Starting Semi-Final Round");
-        self.current_round = "Semi-Final Round".to_string();
-        self.setup_next_round(&second_round_winners, 1)?;
+        // Run Third Round
+        info!("Starting Third Round");
+        self.current_round = "Third Round".to_string();
+        self.setup_next_round(&second_round_winners, 2)?; // 2 groups of 4 teams each
         self.run_round()?;
-        let semifinal_results = self.determine_winners();
+        let third_round_winners = self.determine_winners();
+
+        // Run Fourth Round
+        info!("Starting Fourth Round");
+        self.current_round = "Fourth Round".to_string();
+        self.setup_next_round(&third_round_winners, 1)?; // 1 group of 4 teams
+        self.run_round()?;
+        let fourth_round_results = self.determine_fourth_round_rankings();
 
         // Run Final Round
         info!("Starting Final Round");
         self.current_round = "Final Round".to_string();
-        self.setup_finals(&semifinal_results)?;
+        self.setup_finals(&fourth_round_results)?;
         self.run_round()?;
 
         // Print final results
@@ -440,12 +465,8 @@ impl TournamentManager {
                 // Sort by points (descending)
                 players.sort_by(|a, b| b.1.points.partial_cmp(&a.1.points).unwrap_or(std::cmp::Ordering::Equal));
 
-                // Take the top N players (2 for First and Second Rounds)
-                let num_to_advance = if self.current_round == "First Round" || self.current_round == "Second Round" {
-                    2
-                } else {
-                    2 // Default, though Semi-Final uses different logic
-                };
+                // Take the top 2 players from each group
+                let num_to_advance = 2;
 
                 let group_winners: Vec<String> = players.iter()
                     .take(num_to_advance)
@@ -457,6 +478,30 @@ impl TournamentManager {
         }
 
         winners
+    }
+
+    fn determine_fourth_round_rankings(&self) -> Vec<String> {
+        let mut ranked_players = Vec::new();
+
+        if let Some(round_stats) = self.player_stats.get("Fourth Round") {
+            // Get the first (and only) group in the fourth round
+            if let Some((_, group_stats)) = round_stats.iter().next() {
+                // Convert HashMap to Vec for sorting
+                let mut players: Vec<(String, &PlayerStats)> = group_stats.iter()
+                    .map(|(name, stats)| (name.clone(), stats))
+                    .collect();
+
+                // Sort by points (descending)
+                players.sort_by(|a, b| b.1.points.partial_cmp(&a.1.points).unwrap_or(std::cmp::Ordering::Equal));
+
+                // Return all players in ranked order
+                ranked_players = players.into_iter()
+                    .map(|(name, _)| name)
+                    .collect();
+            }
+        }
+
+        ranked_players
     }
 
     fn setup_next_round(
@@ -487,8 +532,16 @@ impl TournamentManager {
             };
 
             let group_name = format!("Group {}", (b'A' + i as u8) as char);
-            let group_players = all_winners[start..end].to_vec();
-            self.groups.insert(group_name, group_players);
+
+            // Make sure we don't go out of bounds
+            if start < all_winners.len() {
+                let end_idx = std::cmp::min(end, all_winners.len());
+                let group_players = all_winners[start..end_idx].to_vec();
+
+                if !group_players.is_empty() {
+                    self.groups.insert(group_name, group_players);
+                }
+            }
         }
 
         // Initialize player stats for this round
@@ -512,44 +565,30 @@ impl TournamentManager {
         Ok(())
     }
 
-    fn setup_finals(&mut self, semifinal_results: &HashMap<String, Vec<String>>) -> Result<(), Box<dyn std::error::Error>> {
-        // Get all semifinalists
-        let mut semifinalists = Vec::new();
-        for (_, players) in semifinal_results {
-            semifinalists.extend_from_slice(players);
-        }
-
-        // Sort semifinalists by performance in semifinal round
-        if let Some(semifinal_stats) = self.player_stats.get("Semi-Final Round") {
-            if let Some(group_name) = semifinal_stats.keys().next() {
-                if let Some(group_stats) = semifinal_stats.get(group_name) {
-                    semifinalists.sort_by(|a, b| {
-                        if let (Some(a_stats), Some(b_stats)) = (group_stats.get(a), group_stats.get(b)) {
-                            b_stats.points.partial_cmp(&a_stats.points).unwrap_or(std::cmp::Ordering::Equal)
-                        } else {
-                            std::cmp::Ordering::Equal
-                        }
-                    });
-                }
-            }
-        }
-
+    fn setup_finals(&mut self, ranked_players: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         // Clear old groups
         self.groups.clear();
 
-        // We need at least 2 players for the final
-        if semifinalists.len() >= 2 {
-            // Top 2 play for 1st place
-            self.groups.insert("Final".to_string(), vec![semifinalists[0].clone(), semifinalists[1].clone()]);
+        // We need at least 4 players for the final setup
+        if ranked_players.len() >= 4 {
+            // Top 2 play for 1st/2nd place
+            self.groups.insert(
+                "Championship".to_string(),
+                vec![ranked_players[0].clone(), ranked_players[1].clone()]
+            );
 
-            // If we have 4 semifinalists, set up the third place match
-            if semifinalists.len() >= 4 {
-                self.groups.insert("Third Place".to_string(), vec![semifinalists[2].clone(), semifinalists[3].clone()]);
-            }
+            // 3rd and 4th play for 3rd/4th place
+            self.groups.insert(
+                "Third Place Match".to_string(),
+                vec![ranked_players[2].clone(), ranked_players[3].clone()]
+            );
         } else {
-            warn!("Not enough semifinalists for a proper final. Setting up with available players.");
-            if !semifinalists.is_empty() {
-                self.groups.insert("Final".to_string(), semifinalists);
+            warn!("Not enough players from Fourth Round for proper finals. Setting up with available players.");
+            if ranked_players.len() >= 2 {
+                self.groups.insert(
+                    "Championship".to_string(),
+                    vec![ranked_players[0].clone(), ranked_players[1].clone()]
+                );
             }
         }
 
@@ -567,15 +606,13 @@ impl TournamentManager {
 
         // Log finals setup
         info!("Finals setup:");
-        if let Some(final_players) = self.groups.get("Final") {
-            if final_players.len() >= 2 {
-                info!("Championship match: {} vs {}", final_players[0], final_players[1]);
-            } else if !final_players.is_empty() {
-                info!("Championship: {}", final_players[0]);
+        if let Some(championship_players) = self.groups.get("Championship") {
+            if championship_players.len() >= 2 {
+                info!("Championship match: {} vs {}", championship_players[0], championship_players[1]);
             }
         }
 
-        if let Some(third_place_players) = self.groups.get("Third Place") {
+        if let Some(third_place_players) = self.groups.get("Third Place Match") {
             if third_place_players.len() >= 2 {
                 info!("Third place match: {} vs {}", third_place_players[0], third_place_players[1]);
             }
@@ -609,12 +646,23 @@ impl TournamentManager {
         }
 
         // If this is the end of a round, show who advances
-        if self.current_round == "First Round" || self.current_round == "Second Round" || self.current_round == "Semi-Final Round" {
-            let winners = self.determine_winners();
+        if self.current_round == "First Round" || self.current_round == "Second Round" ||
+           self.current_round == "Third Round" || self.current_round == "Fourth Round" {
 
-            println!("\nAdvancing to next round:");
-            for (group, players) in &winners {
-                println!("From {}: {}", group, players.join(", "));
+            if self.current_round == "Fourth Round" {
+                let ranked_players = self.determine_fourth_round_rankings();
+                println!("\nFinal ranking from Fourth Round:");
+                for (i, player) in ranked_players.iter().enumerate() {
+                    println!("{}. {}", i + 1, player);
+                }
+                println!("\nAdvancing to Championship: {} and {}", ranked_players[0], ranked_players[1]);
+                println!("Playing for 3rd place: {} and {}", ranked_players[2], ranked_players[3]);
+            } else {
+                let winners = self.determine_winners();
+                println!("\nAdvancing to next round:");
+                for (group, players) in &winners {
+                    println!("From {}: {}", group, players.join(", "));
+                }
             }
         }
 
@@ -626,9 +674,9 @@ impl TournamentManager {
 
         if let Some(final_stats) = self.player_stats.get("Final Round") {
             // Championship result
-            if let Some(final_group) = final_stats.get("Final") {
+            if let Some(championship_stats) = final_stats.get("Championship") {
                 // Convert HashMap to Vec for sorting
-                let mut finalists: Vec<(String, &PlayerStats)> = final_group.iter()
+                let mut finalists: Vec<(String, &PlayerStats)> = championship_stats.iter()
                     .map(|(name, stats)| (name.clone(), stats))
                     .collect();
 
@@ -643,9 +691,9 @@ impl TournamentManager {
             }
 
             // Third place result
-            if let Some(third_place_group) = final_stats.get("Third Place") {
+            if let Some(third_place_stats) = final_stats.get("Third Place Match") {
                 // Convert HashMap to Vec for sorting
-                let mut third_place_contestants: Vec<(String, &PlayerStats)> = third_place_group.iter()
+                let mut third_place_contestants: Vec<(String, &PlayerStats)> = third_place_stats.iter()
                     .map(|(name, stats)| (name.clone(), stats))
                     .collect();
 
@@ -725,9 +773,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Initialize logging with selected level
-    SimpleLogger::new()
-        .with_level(log_level)
-        .init()?;
+    let log_file = File::create("tournament.log")?;
+    WriteLogger::init(log_level, Config::default(), log_file)?;
 
     info!("Starting tournament manager");
 
