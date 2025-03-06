@@ -668,21 +668,9 @@ class LaskerMorris(AbstractGame):
                 future = executor.submit(self._current_player.read)
                 return future.result(timeout=self.move_timeout)
             except TimeoutError:
-                winner_color = (
-                    self._player2.get_color()
-                    if self._current_player == self._player1
-                    else self._player1.get_color()
-                )
-                loser_color = self._current_player.get_color()
-                message = f"END: {winner_color} WINS! {loser_color} LOSES! Time out!"
-                if self.visual:
-                    self.web.end_message = message
-                self._player1.write(message)
-                self._player2.write(message)
                 click.echo(
                     f"\n{Fore.RED}Move timeout: Player {self._current_player.get_color()} took too long to respond{Style.RESET_ALL}"
                 )
-
                 return None
 
     def run_game(self) -> Optional[LaskerPlayer]:
@@ -708,25 +696,34 @@ class LaskerMorris(AbstractGame):
             move = self._get_move_with_timeout()
             if not move or not self.make_move(move):
                 self._is_game_over = True
-                winner_color = (
-                    self._player2.get_color()
-                    if self._current_player == self._player1
-                    else self._player1.get_color()
-                )
+                winner = self._player2 if self._current_player == self._player1 else self._player1
+                winner_color = winner.get_color()
                 loser_color = self._current_player.get_color()
-                message = f"END: {winner_color} WINS! {loser_color} LOSES! Invalid move {move}!"
+                # Create appropriate message based on whether it was a timeout or invalid move
+                if not move:
+                    message = f"END: {winner_color} WINS! {loser_color} LOSES! Time out!"
+                else:
+                    message = f"END: {winner_color} WINS! {loser_color} LOSES! Invalid move {move}!"
+
                 if self.visual:
                     self.web.end_message = message
-                self._player1.write(message)
-                self._player2.write(message)
+
+                # Write the end messages before stopping the processes
+                try:
+                    self._player1.write(message)
+                except Exception:
+                    pass
+
+                try:
+                    self._player2.write(message)
+                except Exception:
+                    pass
+
+                # Now stop the players
                 self._player1.stop()
                 self._player2.stop()
 
-                return (
-                    self._player2
-                    if self._current_player == self._player1
-                    else self._player1
-                )
+                return winner
 
             # Send move to other player
             other_player = (

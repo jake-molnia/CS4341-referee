@@ -52,3 +52,4 @@ tournament_results.csv
 
 # Rust things
 target/
+tournament/visualizer.py
