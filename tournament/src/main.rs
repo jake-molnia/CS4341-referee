@@ -65,7 +65,7 @@ impl PlayerStats {
             self.points += 1.0;
         } else if Some(self.name.clone()) == result.winner {
             self.wins += 1;
-            self.points += 3.0;
+            self.points += 2.0;
         } else {
             self.losses += 1;
         }
