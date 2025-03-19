@@ -3,8 +3,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from src.game.abstract.game import AbstractGame
-from src.game.abstract.player import AbstractPlayer
+from src.core.abstract import AbstractGame, AbstractPlayer
 
 
 class MockGame(AbstractGame):

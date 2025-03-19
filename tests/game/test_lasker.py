@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from src.game.implementation.lasker_morris import LaskerMorris
+from src.core.games import LaskerMorris
 
 
 class TestLaskerMorris(unittest.TestCase):
@@ -287,6 +287,7 @@ class TestLaskerMorris(unittest.TestCase):
     @patch("click.echo")
     def test_visual_display(self, mock_echo) -> None:
         """Test the visual display functionality"""
+        self.game.debug = True
         self.game._show_state("h1 d1 r0")
         mock_echo.assert_called()
 

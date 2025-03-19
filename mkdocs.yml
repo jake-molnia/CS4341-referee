@@ -1,0 +1,56 @@
+site_name: CS4341 Game Referee
+site_description: Documentation for the CS4341 Game Referee System
+site_author: WPI CS4341 Team
+
+repo_url: https://github.com/jake-molnia/cs4341-referee
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+  palette:
+    primary: indigo
+    accent: blue
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed
+  - pymdownx.details
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quick-start.md
+      - Common Options: getting-started/common-options.md
+  - Games:
+      - Tic-tac-toe: games/tictactoe.md
+      - Lasker Morris: games/laskermorris.md
+  - Development:
+      - Architecture: development/architecture.md
+      - Adding New Games: development/adding-games.md
+      - Web Visualization: development/visualization.md
+  - API Reference:
+      - AbstractGame: api/abstract-game.md
+      - AbstractPlayer: api/abstract-player.md
+      - WebGame: api/web-game.md
+      - Games:
+          - TicTacToe: api/games/tictactoe.md
+          - LaskerMorris: api/games/laskermorris.md
+      - Players: api/players.md
+      - Utilities: api/utilities.md
+  - Tournament:
+      - Overview: tournament/overview.md
+      - Configuration: tournament/configuration.md
+      - Running Tournaments: tournament/running.md

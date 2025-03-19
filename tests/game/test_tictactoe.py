@@ -2,7 +2,7 @@ import unittest
 from concurrent.futures import TimeoutError
 from unittest.mock import Mock, patch
 
-from src.game.implementation.tictactoe import TicTacToe
+from src.core.games import TicTacToe
 
 
 class TestTicTacToe(unittest.TestCase):
