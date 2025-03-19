@@ -287,6 +287,7 @@ class TestLaskerMorris(unittest.TestCase):
     @patch("click.echo")
     def test_visual_display(self, mock_echo) -> None:
         """Test the visual display functionality"""
+        self.game.debug = True
         self.game._show_state("h1 d1 r0")
         mock_echo.assert_called()
 
