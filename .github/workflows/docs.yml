@@ -1,0 +1,78 @@
+name: Build and Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Fetch all history for proper versioning
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mkdocs mkdocs-material
+
+      - name: Create necessary directories
+        run: |
+          mkdir -p docs/assets
+          mkdir -p docs/getting-started
+          mkdir -p docs/games
+          mkdir -p docs/development
+          mkdir -p docs/api/games
+          mkdir -p docs/tournament
+
+      - name: Check for missing documentation files
+        run: |
+          # Create placeholder files for any missing but referenced documentation
+          # This ensures the build doesn't fail due to missing files
+          for page in $(grep -oP '(?<=: )[^:]+\.md' mkdocs.yml); do
+            dir=$(dirname $page)
+            mkdir -p docs/$dir
+            if [ ! -f docs/$page ]; then
+              echo "# Coming Soon" > docs/$page
+              echo "This documentation is currently being developed." >> docs/$page
+            fi
+          done
+
+      - name: Build and deploy documentation
+        run: |
+          mkdocs build
+
+      - name: Deploy to GitHub Pages
+        # Only deploy on main branch push, not on PRs
+        if: github.event_name != 'pull_request'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          force_orphan: true
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+          commit_message: "Update documentation [skip ci]"
