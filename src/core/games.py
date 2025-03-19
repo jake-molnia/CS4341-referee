@@ -1,14 +1,15 @@
 import random
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Optional, Tuple
 
 import click
 from colorama import Fore, Style
 
 from ..config import GameConfig, LaskerConfig
-from .abstract import AbstractGame, AbstractPlayer
+from .abstract import AbstractGame
 from .players import LaskerPlayer, TicTacToePlayer
-from .utils import BoardUtils, InvalidMoveError
+from .utils import BoardUtils
+
 
 class TicTacToe(AbstractGame):
     VALID_COLUMNS = set("abc")
@@ -219,6 +220,7 @@ class TicTacToe(AbstractGame):
         """Clean up game resources."""
         self._player1.stop()
         self._player2.stop()
+
 
 class LaskerMorris(AbstractGame):
     """Implementation of Lasker Morris game."""
