@@ -45,6 +45,7 @@ class TicTacToe(AbstractGame):
         self.visual = visual
         self.web = self._create_web_interface() if visual else None
         self.move_history = []
+        self.initialize_game()
 
     def _create_web_interface(self):
         from .web import TicTacToeWeb
@@ -267,6 +268,7 @@ class LaskerMorris(AbstractGame):
 
         self.visual = visual
         self.web = self._create_web_interface() if visual else None
+        self.initialize_game()
 
     def _create_web_interface(self):
         from .web import LaskerMorrisWeb
