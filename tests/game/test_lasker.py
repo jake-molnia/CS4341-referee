@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from src.game.implementation.lasker_morris import LaskerMorris
+from src.core.games import LaskerMorris
 
 
 class TestLaskerMorris(unittest.TestCase):
