@@ -18,6 +18,7 @@
           pkgs.maven
           pkgs.cargo
           pkgs.dos2unix
+          pkgs.graphviz
         ];
 
       };
