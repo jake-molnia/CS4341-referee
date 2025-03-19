@@ -46,3 +46,10 @@ docs/_build/
 # Dev stuff
 .example
 rebuild.sh
+wrappers/
+tournament.toml
+tournament_results.csv
+
+# Rust things
+target/
+tournament/visualizer.py

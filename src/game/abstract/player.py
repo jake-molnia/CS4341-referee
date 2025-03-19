@@ -70,10 +70,15 @@ class AbstractPlayer(ABC):
             data: String to write to the process
         """
         if self.process and self.process.stdin:
-            self.process.stdin.write(f"{data}\n")
-            self.process.stdin.flush()
-            if self.log:
-                self._log_operation("WRITE", data)
+            try:
+                self.process.stdin.write(f"{data}\n")
+                self.process.stdin.flush()
+                if self.log:
+                    self._log_operation("WRITE", data)
+            except (BrokenPipeError, IOError) as e:
+                # Pipe already closed or broken, log it but don't crash
+                if self.log:
+                    self._log_operation("WRITE_ERROR", f"Error writing '{data}': {str(e)}")
 
     def read(self) -> str:
         """
@@ -89,18 +94,33 @@ class AbstractPlayer(ABC):
             return data
         return ""
 
+    # Modify the stop method in AbstractPlayer (src/game/abstract/player.py)
     def stop(self) -> None:
         """Terminate the player process safely and cleanup resources."""
         sleep(0.25)
         if self.process:
             try:
-                # First attempt graceful termination first closing the pipes and then the process
-                if self.process.stdin:
-                    self.process.stdin.close()
-                if self.process.stdout:
-                    self.process.stdout.close()
-                if self.process.stderr:
-                    self.process.stderr.close()
+                # First attempt graceful termination by closing pipes
+                try:
+                    if self.process.stdin:
+                        self.process.stdin.close()
+                except (BrokenPipeError, IOError):
+                    # Ignore pipe errors during shutdown
+                    pass
+
+                try:
+                    if self.process.stdout:
+                        self.process.stdout.close()
+                except (BrokenPipeError, IOError):
+                    # Ignore pipe errors during shutdown
+                    pass
+
+                try:
+                    if self.process.stderr:
+                        self.process.stderr.close()
+                except (BrokenPipeError, IOError):
+                    # Ignore pipe errors during shutdown
+                    pass
 
                 self.process.terminate()
 
@@ -110,7 +130,11 @@ class AbstractPlayer(ABC):
                 except subprocess.TimeoutExpired:
                     # If process doesn't terminate gracefully, force kill it
                     self.process.kill()
-                    self.process.wait(timeout=1.0)
+                    try:
+                        self.process.wait(timeout=1.0)
+                    except (subprocess.TimeoutExpired, ProcessLookupError):
+                        # Process might already be gone, just continue
+                        pass
             except ProcessLookupError:
                 # Process already terminated
                 pass
