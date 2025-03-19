@@ -345,6 +345,54 @@ class LaskerMorris(AbstractGame):
 
         return False
 
+    def _is_oscillating_moves(self) -> bool:
+        """Check if players are making repetitive moves with no strategic progress."""
+        if len(self.game_history) < 6:
+            return False
+
+        blue_moves = []
+        orange_moves = []
+
+        for move_data in self.game_history[-8:]:
+            source, target, remove = move_data["move"].split()
+            if source not in ["h1", "h2"]:
+                if move_data["player"] == "blue":
+                    blue_moves.append((source, target, remove))
+                else:
+                    orange_moves.append((source, target, remove))
+
+        def check_oscillation(moves):
+            if len(moves) < 4:
+                return False
+
+            for i in range(len(moves) - 3):
+                move1, move2, move3, move4 = moves[i: i + 4]
+
+                basic_pattern = (
+                    move1[0] == move2[1]
+                    and move1[1] == move2[0]
+                    and move3[0] == move4[1]
+                    and move3[1] == move4[0]
+                )
+
+                repeating_pattern = (
+                    move1[0] == move3[0]
+                    and move1[1] == move3[1]
+                    and move2[0] == move4[0]
+                    and move2[1] == move4[1]
+                )
+
+                no_captures = all(
+                    move[2] == "r0" for move in [move1, move2, move3, move4]
+                )
+
+                if basic_pattern and repeating_pattern and no_captures:
+                    return True
+
+            return False
+
+        return check_oscillation(blue_moves) and check_oscillation(orange_moves)
+
     def _is_valid_move(self, source: str, target: str, remove: str) -> bool:
         # Validate target position
         if target in self.invalid_fields or target not in self.board:
